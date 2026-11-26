@@ -368,7 +368,7 @@
                 bg: 0x050d1a, 
                 fog: 0x050d1a,
                 champagneGold: 0xffd966, 
-                deepGreen: 0x03180a,     
+                deepGreen: 0x062b14,     
                 accentRed: 0x990000,     
             },
             particles: {
@@ -447,21 +447,112 @@
 //   - @Style: Luxury Dashboard UI (Hidden by default, toggle with 'S')
 // --> 
 
+        // 圆形光点贴图（避免 Points 渲染成方块）
+        let dotTex = null;
+        function makeDotTexture() {
+          if (dotTex) return dotTex;
+          var c = document.createElement('canvas');
+          c.width = c.height = 64;
+          var g = c.getContext('2d');
+          var grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+          grd.addColorStop(0, 'rgba(255,255,255,1)');
+          grd.addColorStop(0.3, 'rgba(255,245,215,0.85)');
+          grd.addColorStop(0.65, 'rgba(255,222,160,0.30)');
+          grd.addColorStop(1, 'rgba(255,210,140,0)');
+          g.fillStyle = grd;
+          g.fillRect(0, 0, 64, 64);
+          dotTex = new THREE.CanvasTexture(c);
+          dotTex.colorSpace = THREE.SRGBColorSpace;
+          return dotTex;
+        }
+        // ===== 螺旋上升光流（明显的粒子动效） =====
+        let flowSprites = [];
+        function createFlowParticles() {
+          var COUNT = 110;
+          var tex = makeDotTexture();
+          for (var i = 0; i < COUNT; i++) {
+            var mat = new THREE.SpriteMaterial({
+              map: tex, color: 0xfff2d0, transparent: true, opacity: 0.9,
+              blending: THREE.AdditiveBlending, depthWrite: false
+            });
+            var sp = new THREE.Sprite(mat);
+            sp.userData = {
+              ang: Math.random() * Math.PI * 2,
+              t: Math.random(),
+              rise: 0.05 + Math.random() * 0.09,
+              spin: 0.4 + Math.random() * 1.1,
+              size: 0.45 + Math.random() * 0.5
+            };
+            scene.add(sp);
+            flowSprites.push(sp);
+          }
+        }
+        function updateFlow(dt) {
+          var H = CONFIG.particles.treeHeight, R = CONFIG.particles.treeRadius;
+          for (var i = 0; i < flowSprites.length; i++) {
+            var sp = flowSprites[i], d = sp.userData;
+            d.t += d.rise * dt;
+            if (d.t > 1) d.t -= 1;
+            d.ang += d.spin * dt;
+            var y = (d.t * H) - H / 2;
+            var r = R * (1 - d.t) * 1.22 + 0.4;
+            sp.position.set(Math.cos(d.ang) * r, y, Math.sin(d.ang) * r);
+            var fade = Math.sin(d.t * Math.PI);
+            sp.material.opacity = 0.18 + 0.75 * fade;
+            sp.scale.setScalar(d.size * (0.65 + 0.55 * fade));
+          }
+        }
+        // ===== 树本体（锥形壳）+ 旋转螺旋光带 =====
+        let spiralBands, treeShell;
+        function createTreeBody() {
+          var H = CONFIG.particles.treeHeight, R = CONFIG.particles.treeRadius;
+          // 2) 螺旋光带：3 条沿锥面上升的亮点，绕树独立旋转
+          spiralBands = new THREE.Group();
+          for (var b = 0; b < 3; b++) {
+            var N = 300;
+            var pos = new Float32Array(N * 3);
+            var cols = new Float32Array(N * 3);
+            for (var i = 0; i < N; i++) {
+              var t = i / (N - 1);
+              var y = (t * H) - H / 2;
+              var r = R * (1.0 - t) * (1.10 + Math.random() * 0.04) + 0.16;
+              var ang = t * Math.PI * 2 * 5.5 + (b * Math.PI * 2 / 3);
+              pos[i*3] = Math.cos(ang) * r;
+              pos[i*3+1] = y;
+              pos[i*3+2] = Math.sin(ang) * r;
+              var fade = 0.45 + 0.55 * Math.sin(t * Math.PI);
+              cols[i*3] = 1.0;
+              cols[i*3+1] = 0.86 * fade + 0.08;
+              cols[i*3+2] = 0.52 * fade + 0.04;
+            }
+            var g = new THREE.BufferGeometry();
+            g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+            g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+            var m = new THREE.PointsMaterial({
+              size: 0.18, map: makeDotTexture(), vertexColors: true, transparent: true, opacity: 0.85,
+              blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
+            });
+            spiralBands.add(new THREE.Points(g, m));
+          }
+          scene.add(spiralBands);
+        }
+
+
         // ===== 旋转粒子环（绕树旋转的星光） =====
         let orbitGroup;
         function createOrbitParticles() {
           orbitGroup = new THREE.Group();
           scene.add(orbitGroup);
-          var COUNT = 900;
+          var COUNT = 420;
           var pos = new Float32Array(COUNT * 3);
           var cols = new Float32Array(COUNT * 3);
           var palette = [[0.72,0.86,1.0],[1.0,0.92,0.7],[1.0,0.78,0.78],[0.85,0.95,1.0]];
           for (var i = 0; i < COUNT; i++) {
             var v = Math.pow(Math.random(), 0.7);
-            var y = -3.2 + v * 7.2;
-            var maxR = (1 - v) * 2.6 + 0.9;
+            var y = -12 + v * 24;
+            var maxR = (1 - v) * 8.6 + 0.5;
             var ang = Math.random() * Math.PI * 2;
-            var r = maxR * (0.75 + Math.random() * 0.35);
+            var r = maxR * (0.92 + Math.random() * 0.30);
             pos[i*3] = Math.cos(ang) * r;
             pos[i*3+1] = y;
             pos[i*3+2] = Math.sin(ang) * r;
@@ -471,7 +562,7 @@
           var geo = new THREE.BufferGeometry();
           geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
           geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-          var mat = new THREE.PointsMaterial({size:0.055, vertexColors:true, transparent:true, opacity:0.9,
+          var mat = new THREE.PointsMaterial({size:0.15, map:makeDotTexture(), vertexColors:true, transparent:true, opacity:0.85,
             blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true});
           var pts = new THREE.Points(geo, mat);
           orbitGroup.add(pts);
@@ -675,7 +766,7 @@
                 const y = (t * h) - (h / 2);
                 let rMax = Math.max(0.5, CONFIG.particles.treeRadius * (1.0 - t));
                 const angle = t * 50 * Math.PI + Math.random() * Math.PI; 
-                const r = rMax * (0.8 + Math.random() * 0.4); 
+                const r = rMax * (0.9 + Math.random() * 0.2); 
                 this.posTree.set(Math.cos(angle) * r, y, Math.sin(angle) * r);
                 let rScatter = this.isDust ? (12 + Math.random()*20) : (8 + Math.random()*12);
                 const theta = Math.random() * Math.PI * 2;
@@ -747,7 +838,7 @@
             const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -0.5, 0), new THREE.Vector3(0, 0.3, 0), new THREE.Vector3(0.1, 0.5, 0), new THREE.Vector3(0.3, 0.4, 0)]);
             const candyGeo = new THREE.TubeGeometry(curve, 16, 0.08, 8, false);
             const goldMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.champagneGold, metalness: 1.0, roughness: 0.1, envMapIntensity: 2.0, emissive: 0x443300, emissiveIntensity: 0.3 });
-            const greenMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.deepGreen, metalness: 0.2, roughness: 0.8, emissive: 0x002200, emissiveIntensity: 0.2 });
+            const greenMat = new THREE.MeshStandardMaterial({ color: CONFIG.colors.deepGreen, metalness: 0.2, roughness: 0.8, emissive: 0x041a09, emissiveIntensity: 0.18 });
             const redMat = new THREE.MeshPhysicalMaterial({ color: CONFIG.colors.accentRed, metalness: 0.3, roughness: 0.2, clearcoat: 1.0, emissive: 0x330000 });
             const candyMat = new THREE.MeshStandardMaterial({ map: caneTexture, roughness: 0.4 });
             for (let i = 0; i < CONFIG.particles.count; i++) {
