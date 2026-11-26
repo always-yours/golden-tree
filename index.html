@@ -495,7 +495,7 @@
             if (d.t > 1) d.t -= 1;
             d.ang += d.spin * dt;
             var y = (d.t * H) - H / 2;
-            var r = R * (1 - d.t) * 1.22 + 0.4;
+            var r = R * (1 - d.t) * 1.5 + 1.9;
             sp.position.set(Math.cos(d.ang) * r, y, Math.sin(d.ang) * r);
             var fade = Math.sin(d.t * Math.PI);
             sp.material.opacity = 0.18 + 0.75 * fade;
@@ -515,7 +515,7 @@
             for (var i = 0; i < N; i++) {
               var t = i / (N - 1);
               var y = (t * H) - H / 2;
-              var r = R * (1.0 - t) * (1.10 + Math.random() * 0.04) + 0.16;
+              var r = R * (1.0 - t) * 1.55 + 1.8 + Math.random() * 0.5;
               var ang = t * Math.PI * 2 * 5.5 + (b * Math.PI * 2 / 3);
               pos[i*3] = Math.cos(ang) * r;
               pos[i*3+1] = y;
@@ -529,7 +529,7 @@
             g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
             g.setAttribute('color', new THREE.BufferAttribute(cols, 3));
             var m = new THREE.PointsMaterial({
-              size: 0.18, map: makeDotTexture(), vertexColors: true, transparent: true, opacity: 0.85,
+              size: 0.52, map: makeDotTexture(), vertexColors: true, transparent: true, opacity: 0.95,
               blending: THREE.AdditiveBlending, depthWrite: false, sizeAttenuation: true
             });
             spiralBands.add(new THREE.Points(g, m));
@@ -543,29 +543,47 @@
         function createOrbitParticles() {
           orbitGroup = new THREE.Group();
           scene.add(orbitGroup);
-          var COUNT = 420;
+          var COUNT = 480;
           var pos = new Float32Array(COUNT * 3);
           var cols = new Float32Array(COUNT * 3);
-          var palette = [[0.72,0.86,1.0],[1.0,0.92,0.7],[1.0,0.78,0.78],[0.85,0.95,1.0]];
+          var H = CONFIG.particles.treeHeight, R = CONFIG.particles.treeRadius;
+          var LEVELS = [0.18, 0.42, 0.66, 0.86];
+          var palette = [[1.0,0.95,0.75],[1.0,0.88,0.55],[0.95,0.97,1.0],[1.0,0.85,0.6]];
           for (var i = 0; i < COUNT; i++) {
-            var v = Math.pow(Math.random(), 0.7);
-            var y = -12 + v * 24;
-            var maxR = (1 - v) * 8.6 + 0.5;
-            var ang = Math.random() * Math.PI * 2;
-            var r = maxR * (0.92 + Math.random() * 0.30);
-            pos[i*3] = Math.cos(ang) * r;
-            pos[i*3+1] = y;
-            pos[i*3+2] = Math.sin(ang) * r;
-            var c = palette[(Math.random()*palette.length)|0];
+            var ri = i % LEVELS.length;
+            var lv = LEVELS[ri];
+            var y = (lv * H) - H / 2;
+            var ringR = R * (1 - lv) * 1.45 + 2.2;
+            var ang = (i / COUNT) * Math.PI * 2 * 6 + ri * 0.7;
+            var rr = ringR * (0.97 + Math.random() * 0.06);
+            pos[i*3] = Math.cos(ang) * rr;
+            pos[i*3+1] = y + (Math.random() - 0.5) * 0.3;
+            pos[i*3+2] = Math.sin(ang) * rr;
+            var c = palette[ri % palette.length];
             cols[i*3] = c[0]; cols[i*3+1] = c[1]; cols[i*3+2] = c[2];
           }
           var geo = new THREE.BufferGeometry();
           geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
           geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
-          var mat = new THREE.PointsMaterial({size:0.15, map:makeDotTexture(), vertexColors:true, transparent:true, opacity:0.85,
+          var mat = new THREE.PointsMaterial({size:0.20, map:makeDotTexture(), vertexColors:true, transparent:true, opacity:0.7,
             blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true});
           var pts = new THREE.Points(geo, mat);
           orbitGroup.add(pts);
+
+          // 三条倾斜实体光环（绕树旋转，明显可见）
+          var ringMat = new THREE.MeshBasicMaterial({
+            color: 0xffc963, transparent: true, opacity: 0.55,
+            blending: THREE.AdditiveBlending, depthWrite: false
+          });
+          var ringCfgs = [[9.4, -5.0, 0.055], [7.8, 1.2, 0.05], [6.2, 7.0, 0.045]];
+          for (var rc = 0; rc < ringCfgs.length; rc++) {
+            var cfg = ringCfgs[rc];
+            var tg = new THREE.TorusGeometry(cfg[0], cfg[2], 8, 200);
+            var tm = new THREE.Mesh(tg, ringMat);
+            tm.rotation.x = Math.PI / 2;
+            tm.position.y = cfg[1];
+            orbitGroup.add(tm);
+          }
         }
 
         function setupTouchAndClick() {
@@ -981,7 +999,7 @@
                     STATE.rotation.y += 0.1 * dt; 
                 }
             }
-            if (orbitGroup) { orbitGroup.rotation.y += dt * 0.18; orbitGroup.rotation.x = Math.sin(performance.now()*0.0003)*0.05; }
+            if (orbitGroup) { orbitGroup.rotation.y += dt * 0.18; orbitGroup.rotation.x = 0.20 + Math.sin(performance.now()*0.0003)*0.05; }
             mainGroup.rotation.y = STATE.rotation.y;
             mainGroup.rotation.x = STATE.rotation.x;
             particleSystem.forEach(p => p.update(dt, STATE.mode, STATE.focusTarget));
